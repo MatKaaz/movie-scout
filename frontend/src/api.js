@@ -12,3 +12,14 @@ export function updateSearchCount(query, topMovie) {
     body: JSON.stringify({ query, topMovie })
   });
 }
+
+export async function queryTMDB(query) {
+  const params = new URLSearchParams({ query });
+  return await fetch(`${BASE}/api/query-tmdb?${params}`)
+    .then(res => {
+      if (!res.ok) {
+        throw new Error(`Server responded with status: ${res.status}`);
+      }
+      return res.json();
+    });
+}

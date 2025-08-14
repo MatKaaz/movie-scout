@@ -6,55 +6,73 @@ import mysql from 'mysql2/promise';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({
-  path: path.resolve(__dirname, '../.env.local'),
-});
+
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({
+    path: path.resolve(__dirname, '../.env.local'),
+  });
+}
 
 
-const connection = await mysql.createConnection({
-  host:     process.env.MYSQL_HOST,
-  port:     process.env.MYSQL_PORT,
-  user:     process.env.MYSQL_USER,
+export const pool = mysql.createPool({
+  host: process.env.MYSQL_HOST,
+  port: process.env.MYSQL_PORT || 3306,
+  user: process.env.MYSQL_USER,
   password: process.env.MYSQL_PASSWORD,
   database: process.env.MYSQL_DATABASE,
+  waitForConnections: true,
+  connectionLimit: 10,
 });
 
+// schedule: check for reset every hour (ms)
+const MS = 60 * 60 * 1000;
+setInterval(resetMetricsMonthly, MS);
+resetMetricsMonthly();
 
+async function resetMetricsMonthly() {
+  try {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
 
-export async function updateSearchCount(searchTerm, movie) {
-  const [rows] = await connection.execute(
-    `SELECT count FROM metrics WHERE search_term = ?`,
-    [searchTerm]
-  );
-
-  if (rows.length > 0) {
-    await connection.execute(
-      `UPDATE metrics
-         SET count = count + 1
-       WHERE search_term = ?`,
-      [searchTerm]
+    const [rows] = await pool.execute(
+        'SELECT last_reset_date FROM metrics_reset_log WHERE id = 1'
     );
-  } else {
-    await connection.execute(
-      `INSERT INTO metrics
-         (search_term, movie_id, poster_url)
-       VALUES (?, ?, ?)`,
-      [
-        searchTerm,
-        movie.id,
-        `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-      ]
-    );
+    const lastResetDate = new Date(rows[0]?.last_reset_date);
+
+    const lastResetYear = lastResetDate.getFullYear();
+    const lastResetMonth = lastResetDate.getMonth() + 1;
+
+    if (currentYear > lastResetYear || lastResetMonth > currentMonth) {
+        console.log(`Metrics table reset: ${lastResetMonth} → ${currentMonth}`);
+        await pool.execute('TRUNCATE TABLE metrics');
+        await pool.execute(
+        'INSERT INTO metrics_reset_log (id, last_reset_date) VALUES (1, ?) ON DUPLICATE KEY UPDATE last_reset_date = ?',
+        [now, now]
+        );
+    } else {
+        console.log(`Metrics table already reset for month ${currentMonth + 1}`);
+    }
+  } catch (error) {
+    console.log(error)
   }
 }
 
+export async function updateSearchCount(query, topMovie) {
+  await pool.execute(
+    `INSERT INTO metrics (movie_id, search_term, movie_title, poster_url)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE count = count + 1`,
+    [topMovie.id, query, topMovie.title, `https://image.tmdb.org/t/p/w500${topMovie.poster_path}` || null]
+  );
+}
+
 export async function getTrendingMovies() {
-  const [rows] = await connection.execute(
+  const [rows] = await pool.execute(
     `SELECT
-       search_term,
        movie_id,
-       poster_url,
-       count
+       movie_title,
+       poster_url
      FROM metrics
      ORDER BY count DESC
      LIMIT 5`
