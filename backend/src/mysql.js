@@ -1,20 +1,7 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 import mysql from 'mysql2/promise';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-
-if (process.env.NODE_ENV !== 'production') {
-  dotenv.config({
-    path: path.resolve(__dirname, '../.env.local'),
-  });
-}
-
-
-export const pool = mysql.createPool({
+const pool = mysql.createPool({
   host: process.env.MYSQL_HOST,
   port: process.env.MYSQL_PORT || 3306,
   user: process.env.MYSQL_USER,

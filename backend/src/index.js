@@ -1,3 +1,4 @@
+import './config.js'
 import express from 'express';
 import cors from 'cors';
 import { updateSearchCount, getTrendingMovies } from './mysql.js';
