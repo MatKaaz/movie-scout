@@ -21,7 +21,7 @@ export const pool = mysql.createPool({
   password: process.env.MYSQL_PASSWORD,
   database: process.env.MYSQL_DATABASE,
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 5,
 });
 
 // schedule: check for reset every hour (ms)
@@ -38,18 +38,28 @@ async function resetMetricsMonthly() {
     const [rows] = await pool.execute(
         'SELECT last_reset_date FROM metrics_reset_log WHERE id = 1'
     );
-    const lastResetDate = new Date(rows[0]?.last_reset_date);
+
+    if (rows.length === 0) {
+        console.log('No reset log found. Creating initial entry...');
+        await pool.execute(
+            'INSERT INTO metrics_reset_log (id, last_reset_date) VALUES (1, ?)',
+            [now]
+        );
+        return;
+    }
+    
+    const lastResetDate = new Date(rows[0].last_reset_date);
 
     const lastResetYear = lastResetDate.getFullYear();
     const lastResetMonth = lastResetDate.getMonth() + 1;
 
     if (currentYear > lastResetYear || lastResetMonth > currentMonth) {
         console.log(`Metrics table reset: ${lastResetMonth} → ${currentMonth}`);
-        await pool.execute('TRUNCATE TABLE metrics');
         await pool.execute(
-        'INSERT INTO metrics_reset_log (id, last_reset_date) VALUES (1, ?) ON DUPLICATE KEY UPDATE last_reset_date = ?',
-        [now, now]
+            'UPDATE metrics_reset_log SET last_reset_date = ? WHERE id = 1',
+            [now]
         );
+
     } else {
         console.log(`Metrics table already reset for month ${currentMonth + 1}`);
     }

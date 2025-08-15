@@ -86,7 +86,7 @@ const App = () => {
 
         {trendingSearches.length > 0 && (
           <section className="trending">
-            <h2>Trending Searches this Month</h2>
+            <h2>Most Popular Searches this Month</h2>
 
             <ul>
               {trendingSearches.map((movie, index) => (
