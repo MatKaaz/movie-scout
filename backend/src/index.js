@@ -3,7 +3,7 @@ import { tmdb_query } from './tmdb.js';
 
 function corsHeaders() {
   return {
-    'Access-Control-Allow-Origin': 'https://movie-scout.pages.dev/',
+    'Access-Control-Allow-Origin': 'https://movie-scout.pages.dev',
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
