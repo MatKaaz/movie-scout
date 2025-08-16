@@ -1,4 +1,3 @@
-// src/mysql.js
 import { createConnection } from 'mysql2/promise';
 
 function buildConfigFromEnv(env) {
@@ -20,19 +19,11 @@ function buildConfigFromEnv(env) {
   };
 }
 
-/**
- * Get a cached connection (globalThis) or create a new one.
- * Verifies liveliness with a lightweight SELECT 1 and recreates on failure.
- */
 async function getConnection(env) {
   const cfg = buildConfigFromEnv(env);
   return await createConnection(cfg);
 }
 
-/**
- * Get top trending movies (same SQL as previous code).
- * Returns array of rows.
- */
 export async function getTrendingMovies(env, ctx) {
   const conn = await getConnection(env);
   try {
@@ -44,7 +35,6 @@ export async function getTrendingMovies(env, ctx) {
     );
     return rows;
   } finally {
-    // Ensure connection is closed after use, non-blocking via waitUntil
     ctx.waitUntil(conn.end());
   }
 }
@@ -59,7 +49,6 @@ export async function updateSearchCount(query, topMovie, env, ctx) {
       [topMovie.id, query, topMovie.title, topMovie.poster_path ? `https://image.tmdb.org/t/p/w500${topMovie.poster_path}` : null]
     );
   } finally {
-    // Ensure connection is closed after use, non-blocking via waitUntil
     ctx.waitUntil(conn.end());
   }
 }

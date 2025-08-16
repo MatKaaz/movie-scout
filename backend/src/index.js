@@ -1,10 +1,9 @@
 import { getTrendingMovies, updateSearchCount } from './mysql.js';
 import { tmdb_query } from './tmdb.js';
 
-// CORS helper — restrict origin in production
 function corsHeaders() {
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': 'https://movie-scout.pages.dev/',
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
@@ -21,7 +20,7 @@ export default {
       }
 
       if (pathname === '/api/trending-movies' && request.method === 'GET') {
-        const rows = await getTrendingMovies(env, ctx);     // env required
+        const rows = await getTrendingMovies(env, ctx);
         return new Response(JSON.stringify(rows), {
           status: 200,
           headers: { 'Content-Type': 'application/json', ...corsHeaders() },
@@ -31,13 +30,13 @@ export default {
       if (pathname === '/api/search-count' && request.method === 'POST') {
         const body = await request.json().catch(() => ({}));
         const { query, topMovie } = body;
-        await updateSearchCount(query, topMovie, env, ctx); // env required
+        await updateSearchCount(query, topMovie, env, ctx);
         return new Response(null, { status: 204, headers: corsHeaders() });
       }
 
       if (pathname === '/api/query-tmdb' && request.method === 'GET') {
         const q = url.searchParams.get('query') || '';
-        const data = await tmdb_query(q, env); // env required
+        const data = await tmdb_query(q, env);
         return new Response(JSON.stringify(data), {
           status: 200,
           headers: { 'Content-Type': 'application/json', ...corsHeaders() },
