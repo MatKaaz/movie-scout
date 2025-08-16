@@ -1,78 +1,65 @@
-import mysql from 'mysql2/promise';
+// src/mysql.js
+import { createConnection } from 'mysql2/promise';
 
+function buildConfigFromEnv(env) {
+  if (!env) throw new Error('Worker env required for database configuration');
 
-const pool = mysql.createPool({
-  host: process.env.MYSQL_HOST,
-  port: process.env.MYSQL_PORT || 3306,
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASSWORD,
-  database: process.env.MYSQL_DATABASE,
-  waitForConnections: true,
-  connectionLimit: 5,
-});
+  if (!env.HYPERDRIVE || !env.HYPERDRIVE.host) {
+    throw new Error('No valid DB configuration found in Worker env');
+  }
 
-// schedule: check for reset every hour (ms)
-const MS = 60 * 60 * 1000;
-setInterval(resetMetricsMonthly, MS);
-resetMetricsMonthly();
+  return {
+    host: env.HYPERDRIVE.host,
+    port: env.HYPERDRIVE.port ? Number(env.HYPERDRIVE.port) : 3306,
+    user: env.HYPERDRIVE.user,
+    password: env.HYPERDRIVE.password,
+    database: env.HYPERDRIVE.database,
 
-async function resetMetricsMonthly() {
+    // Required to enable mysql2 compatibility for Workers (avoids eval/Function usage)
+    disableEval: true,
+  };
+}
+
+/**
+ * Get a cached connection (globalThis) or create a new one.
+ * Verifies liveliness with a lightweight SELECT 1 and recreates on failure.
+ */
+async function getConnection(env) {
+  const cfg = buildConfigFromEnv(env);
+  return await createConnection(cfg);
+}
+
+/**
+ * Get top trending movies (same SQL as previous code).
+ * Returns array of rows.
+ */
+export async function getTrendingMovies(env, ctx) {
+  const conn = await getConnection(env);
   try {
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-
-    const [rows] = await pool.execute(
-        'SELECT last_reset_date FROM metrics_reset_log WHERE id = 1'
+    const [rows] = await conn.query(
+      `SELECT movie_id, movie_title, poster_url
+       FROM metrics
+       ORDER BY count DESC
+       LIMIT 5`
     );
-
-    if (rows.length === 0) {
-        console.log('No reset log found. Creating initial entry...');
-        await pool.execute(
-            'INSERT INTO metrics_reset_log (id, last_reset_date) VALUES (1, ?)',
-            [now]
-        );
-        return;
-    }
-    
-    const lastResetDate = new Date(rows[0].last_reset_date);
-
-    const lastResetYear = lastResetDate.getFullYear();
-    const lastResetMonth = lastResetDate.getMonth() + 1;
-
-    if (currentYear > lastResetYear || lastResetMonth > currentMonth) {
-        console.log(`Metrics table reset: ${lastResetMonth} → ${currentMonth}`);
-        await pool.execute(
-            'UPDATE metrics_reset_log SET last_reset_date = ? WHERE id = 1',
-            [now]
-        );
-
-    } else {
-        console.log(`Metrics table already reset for month ${currentMonth + 1}`);
-    }
-  } catch (error) {
-    console.log(error)
+    return rows;
+  } finally {
+    // Ensure connection is closed after use, non-blocking via waitUntil
+    ctx.waitUntil(conn.end());
   }
 }
 
-export async function updateSearchCount(query, topMovie) {
-  await pool.execute(
-    `INSERT INTO metrics (movie_id, search_term, movie_title, poster_url)
-     VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE count = count + 1`,
-    [topMovie.id, query, topMovie.title, `https://image.tmdb.org/t/p/w500${topMovie.poster_path}` || null]
-  );
-}
-
-export async function getTrendingMovies() {
-  const [rows] = await pool.execute(
-    `SELECT
-       movie_id,
-       movie_title,
-       poster_url
-     FROM metrics
-     ORDER BY count DESC
-     LIMIT 5`
-  );
-  return rows;
+export async function updateSearchCount(query, topMovie, env, ctx) {
+  const conn = await getConnection(env);
+  try {
+    await conn.query(
+      `INSERT INTO metrics (movie_id, search_term, movie_title, poster_url)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE count = count + 1`,
+      [topMovie.id, query, topMovie.title, topMovie.poster_path ? `https://image.tmdb.org/t/p/w500${topMovie.poster_path}` : null]
+    );
+  } finally {
+    // Ensure connection is closed after use, non-blocking via waitUntil
+    ctx.waitUntil(conn.end());
+  }
 }

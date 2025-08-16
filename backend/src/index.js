@@ -1,45 +1,67 @@
-import './config.js'
-import express from 'express';
-import cors from 'cors';
-import { updateSearchCount, getTrendingMovies } from './mysql.js';
+import { getTrendingMovies, updateSearchCount } from './mysql.js';
 import { tmdb_query } from './tmdb.js';
 
-const app = express();
-app.use(cors(), express.json());
+// CORS helper — restrict origin in production
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+}
 
-app.get('/api/trending-movies', async (req, res) => {
-  try {
-    const movies = await getTrendingMovies();
-    res.json(movies);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to load trending movies' });
-  }
-});
+export default {
+  async fetch(request, env, ctx) {
+    try {
+      const url = new URL(request.url);
+      const pathname = url.pathname;
 
-app.post('/api/search-count', async (req, res) => {
-  try {
-    const { query, topMovie } = req.body;
-    await updateSearchCount(query, topMovie);
-    res.sendStatus(204);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update search count' });
-  }
-});
+      if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: corsHeaders() });
+      }
 
-app.get('/api/query-tmdb', async (req, res) => {
-  try {
-    const { query } = req.query;
-    const movies = await tmdb_query(query);
-    res.json(movies);
-  } catch (err) {
-    console.error("Failed to fetch movies from TMDB: ", err);
-    res.status(500).json({ error: 'Failed to fetch movies' });
-  }
-});
+      if (pathname === '/api/trending-movies' && request.method === 'GET') {
+        const rows = await getTrendingMovies(env, ctx);     // env required
+        return new Response(JSON.stringify(rows), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+        });
+      }
 
-app.get('/health', (req,res) => res.json({ok:true}));
+      if (pathname === '/api/search-count' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        const { query, topMovie } = body;
+        await updateSearchCount(query, topMovie, env, ctx); // env required
+        return new Response(null, { status: 204, headers: corsHeaders() });
+      }
 
-const port = process.env.PORT || 4000;
-app.listen(port, () => console.log(`API listening on port ${port}`));
+      if (pathname === '/api/query-tmdb' && request.method === 'GET') {
+        const q = url.searchParams.get('query') || '';
+        const data = await tmdb_query(q, env); // env required
+        return new Response(JSON.stringify(data), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+        });
+      }
+
+      if (pathname === '/health' && request.method === 'GET') {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ error: 'Not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+    } catch (err) {
+      console.error('Worker handler error:', err);
+      return new Response(JSON.stringify({ error: err?.message || 'Internal error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  },
+};

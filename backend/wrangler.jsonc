@@ -1,0 +1,15 @@
+{
+  "name": "my-backend-worker",
+  "main": "src/index.js",
+  "workers_dev": true,
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "compatibility_date": "2025-08-15",
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "d20c734bc1674b59a2057deff0fe4b0a"
+    }
+  ]
+}
