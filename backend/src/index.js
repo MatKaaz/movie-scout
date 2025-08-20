@@ -1,4 +1,4 @@
-import { getTrendingMovies, updateSearchCount } from './mysql.js';
+import { getTrendingMovies, updateSearchCount, resetMetrics } from './mysql.js';
 import { tmdb_query } from './tmdb.js';
 
 function corsHeaders() {
@@ -56,11 +56,19 @@ export default {
       });
       
     } catch (err) {
-      console.error('Worker handler error:', err);
+      console.error('Worker fetch handler error:', err);
       return new Response(JSON.stringify({ error: err?.message || 'Internal error' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       });
+    }
+  },
+
+  async scheduled(controller, env, ctx) {
+    try {
+      ctx.waitUntil(resetMetrics(env, ctx));
+    } catch (err) {
+      console.error('Worker scheduled handler error:', err?.message);
     }
   },
 };

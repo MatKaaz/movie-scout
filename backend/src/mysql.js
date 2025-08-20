@@ -52,3 +52,16 @@ export async function updateSearchCount(query, topMovie, env, ctx) {
     ctx.waitUntil(conn.end());
   }
 }
+
+export async function resetMetrics(env, ctx) {
+  console.log("Resetting metrics for this month.")
+  const conn = await getConnection(env);
+  try {
+    await conn.query(
+      `TRUNCATE TABLE metrics`
+    );
+  } finally {
+    console.log("Metrics successfully reset.")
+    ctx.waitUntil(conn.end());
+  }
+}
