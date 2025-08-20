@@ -66,7 +66,7 @@ export default {
 
   async scheduled(controller, env, ctx) {
     try {
-      ctx.waitUntil(resetMetrics(env, ctx));
+      await resetMetrics(env);
     } catch (err) {
       console.error('Worker scheduled handler error:', err?.message);
     }
